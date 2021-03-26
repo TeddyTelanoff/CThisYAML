@@ -2,21 +2,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-unsigned allocated, totalFreed, totalAllocated;
+#define DEBUG
 
-static void *YAMLMalloc(size_t bytes)
-{
-    allocated++;
-    totalAllocated++;
-    return malloc(bytes);
-}
+#ifdef DEBUG
+    unsigned allocated, totalFreed, totalAllocated;
+    static void *YAMLMalloc(size_t bytes)
+    {
+        allocated++;
+        totalAllocated++;
+        return malloc(bytes);
+    }
 
-static void YAMLFree(void *block)
-{
-    allocated--;
-    totalFreed++;
-    free(block);
-}
+    static void YAMLFree(void *block)
+    {
+        if (block)
+        {
+            allocated--;
+            totalFreed++;
+            free(block);
+        }
+    }
+#else
+    // void *(*YAMLMalloc)(size_t) = malloc;
+    // void (*YAMLFree)(void *) = free;
+
+    #define YAMLMalloc malloc
+    #define YAMLFree free
+#endif
 
 typedef struct
 {
@@ -181,8 +193,7 @@ void DeleteYAMLNodes(YAMLNode *this)
 
 void DeleteYAMLNode(YAMLNode *this)
 {
-    if (this)
-        YAMLFree(this);
+    YAMLFree(this);
 }
 #undef Current
 
@@ -238,6 +249,8 @@ int main()
 
     MyYAMLTest(1);
     printf("Average (%i) is %fms\n", i, totalTime / (double)i);
-    printf("Allocations: %u / %u (Total Allocated / Total Freed)\n", totalAllocated, totalFreed);
-    printf("Memory Leaks: %u\n", allocated);
+    #ifdef DEBUG
+        printf("Allocations: %u / %u (Total Allocated / Total Freed)\n", totalAllocated, totalFreed);
+        printf("Memory Leaks: %u\n", allocated);
+    #endif
 }
