@@ -2,6 +2,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+unsigned allocated;
+
+static void *YAMLMalloc(size_t bytes)
+{
+    allocated++;
+    return malloc(bytes);
+}
+
+static void YAMLFree(void *block)
+{
+    allocated--;
+    free(block);
+}
+
 typedef struct
 {
     const char *Name;
@@ -39,13 +53,13 @@ YAML *OpenYAML(const char *path)
     FILE *fs = fopen(path, "rb");
     fseek(fs, 0, SEEK_END);
     long len = ftell(fs);
-    char *src = malloc(len + 1);
+    char *src = YAMLMalloc(len + 1);
     rewind(fs);
     fread(src, 1, len, fs);
     fclose(fs);
     src[len] = 0;
     
-    YAML *yaml = malloc(sizeof(YAML));
+    YAML *yaml = YAMLMalloc(sizeof(YAML));
     yaml->Name = path;
     yaml->Source = src;
     return yaml;
@@ -66,9 +80,9 @@ static int YAML__IsQuote(char c)
 static _Bool YAML__IsIdentifier(char c)
 { return YAML__IsIdentifierBegin(c) || YAML__IsNumber(c); }
 
-#define NewStrYAMLNode(node, key, keyLen, strVal, strLen) YAMLNode *node = malloc(sizeof(YAMLNode)); \
+#define NewStrYAMLNode(node, key, keyLen, strVal, strLen) YAMLNode *node = YAMLMalloc(sizeof(YAMLNode)); \
     node->Kind = YAMLVal_String; node->Key = key; node->KeyLen = keyLen; node->StrVal = strVal; node->StrValLen = strLen; node->Next = NULL;
-#define NewNumYAMLNode(node, key, keyLen, numVal) YAMLNode *node = malloc(sizeof(YAMLNode)); \
+#define NewNumYAMLNode(node, key, keyLen, numVal) YAMLNode *node = YAMLMalloc(sizeof(YAMLNode)); \
     node->Kind = YAMLVal_Number; node->Key = key; node->KeyLen = keyLen; node->NumVal = numVal; node->Next = NULL;
 
 #define Current *this->Pos
@@ -149,8 +163,8 @@ void DeleteYAML(YAML *this)
 {
     if (this)
     {
-        free(this->Source);
-        free(this);
+        YAMLFree(this->Source);
+        YAMLFree(this);
     }
 }
 
@@ -158,12 +172,12 @@ void DeleteYAMLNodes(YAMLNode *this)
 {
     if (this)
         DeleteYAMLNodes(this->Next);
-    free(this);
+    YAMLFree(this);
 }
 
 void DeleteYAMLNode(YAMLNode *this)
 {
-    free(this);
+    YAMLFree(this);
 }
 #undef Current
 
@@ -185,27 +199,12 @@ void PrintYAML(YAMLNode *this)
 }
 
 // Benchmark function (ms)
-#ifdef _WIN32
-    #include <windows.h>
-    static double GetTime()
-    {
-        LARGE_INTEGER t, f;
-        QueryPerformanceCounter(&t);
-        QueryPerformanceFrequency(&f);
-        return ((double)t.QuadPart / (double)f.QuadPart) * 1000;
-    }
-#else
-    #include <sys/time.h>
-    #include <sys/resource.h>
-
-    double GetTime()
-    {
-        struct timeval t;
-        struct timezone tzp;
-        gettimeofday(&t, &tzp);
-        return t.tv_sec + t.tv_usec * 1e-3;
-    }
-#endif
+#include <time.h>
+static double GetTime()
+{
+    double time = (double)clock() / CLOCKS_PER_SEC;
+    return time * 1000;
+}
 
 double MyYAMLTest(_Bool print)
 {
@@ -234,4 +233,5 @@ int main()
 
     MyYAMLTest(1);
     printf("Average (%i) is %fms\n", i, totalTime / (double)i);
+    printf("Memory Leaks: %i\n", allocated);
 }
