@@ -2,17 +2,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-unsigned allocated;
+unsigned allocated, totalFreed, totalAllocated;
 
 static void *YAMLMalloc(size_t bytes)
 {
     allocated++;
+    totalAllocated++;
     return malloc(bytes);
 }
 
 static void YAMLFree(void *block)
 {
     allocated--;
+    totalFreed++;
     free(block);
 }
 
@@ -171,13 +173,16 @@ void DeleteYAML(YAML *this)
 void DeleteYAMLNodes(YAMLNode *this)
 {
     if (this)
+    {
         DeleteYAMLNodes(this->Next);
-    YAMLFree(this);
+        YAMLFree(this);
+    }
 }
 
 void DeleteYAMLNode(YAMLNode *this)
 {
-    YAMLFree(this);
+    if (this)
+        YAMLFree(this);
 }
 #undef Current
 
@@ -233,5 +238,6 @@ int main()
 
     MyYAMLTest(1);
     printf("Average (%i) is %fms\n", i, totalTime / (double)i);
-    printf("Memory Leaks: %i\n", allocated);
+    printf("Allocations: %u / %u (Total Allocated / Total Freed)\n", totalAllocated, totalFreed);
+    printf("Memory Leaks: %u\n", allocated);
 }
