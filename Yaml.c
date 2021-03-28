@@ -62,7 +62,7 @@ struct YAMLNode
     YAMLNode *Next;
 };
 
-YAML *OpenYAML(const char *path)
+void OpenYAML(const char *path, YAML *yaml)
 {
     FILE *fs = fopen(path, "rb");
     fseek(fs, 0, SEEK_END);
@@ -73,10 +73,8 @@ YAML *OpenYAML(const char *path)
     fclose(fs);
     src[len] = 0;
     
-    YAML *yaml = YAMLMalloc(sizeof(YAML));
     yaml->Name = path;
     yaml->Source = src;
-    return yaml;
 }
 
 static _Bool YAML__IsWhiteSpace(char c)
@@ -87,6 +85,9 @@ static _Bool YAML__IsIdentifierBegin(char c)
 
 static _Bool YAML__IsNumber(char c)
 { return c >= '0' && c <= '9' || c == '$' || c == '.' || c == '-'; }
+
+static _Bool YAML__IsNoLine(char c)
+{ return c != '\n' && c != '\r' && c != '\0'; }
 
 static int YAML__IsQuote(char c)
 { return ((c == '\'') << 1) + (c == '\"'); }
@@ -141,7 +142,7 @@ static YAMLNode *ParseYAML__(YAML *this)
     else
     {
         const char *valBeg = this->Pos++;
-        while (Current != '\n' && Current != '\r' && Current != '\0')
+        while (YAML__IsNoLine(Current))
             this->Pos++;
         int valLen = this->Pos - valBeg;
         NewStrYAMLNode(node, keyBeg, keyLen, valBeg, valLen);
@@ -176,10 +177,7 @@ YAMLNode *ParseYAML(YAML *this)
 void DeleteYAML(YAML *this)
 {
     if (this)
-    {
         YAMLFree(this->Source);
-        YAMLFree(this);
-    }
 }
 
 void DeleteYAMLNodes(YAMLNode *this)
@@ -225,13 +223,14 @@ static double GetTime()
 double MyYAMLTest(_Bool print)
 {
     double begin = GetTime();
-    YAML *yaml = OpenYAML("Yaml.yml");
-    YAMLNode *nodes = ParseYAML(yaml);
+    YAML yaml;
+    OpenYAML("Yaml.yml", &yaml);
+    YAMLNode *nodes = ParseYAML(&yaml);
     double end = GetTime();
     if (print)
         PrintYAML(nodes);
     DeleteYAMLNodes(nodes);
-    DeleteYAML(yaml);
+    DeleteYAML(&yaml);
 
     return end - begin;
 }
@@ -240,17 +239,19 @@ int main()
 {
     double totalTime, time;
     int i;
-    for (i = 0; i < 1000; i++)
+    for (i = 0; i < 999; i++)
     {
         time = MyYAMLTest(0);
         totalTime += time;
         // printf("Took %fms\n", time); // Comment if you don't want to print
     }
 
-    MyYAMLTest(1);
-    printf("Average (%i) is %fms\n", i, totalTime / (double)i);
+    time = MyYAMLTest(1);
+    totalTime += time;
     #ifdef DEBUG
         printf("Allocations: %u / %u (Total Allocated / Total Freed)\n", totalAllocated, totalFreed);
         printf("Memory Leaks: %u\n", allocated);
     #endif
+    
+    printf("Average (%i) is %fms\n", i, totalTime / (double)i);
 }
